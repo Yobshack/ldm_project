@@ -1,0 +1,96 @@
+%% Kyobi Skutt-Kakaria
+% 02.16.2018 - Created
+% 02.16.2018 - updated
+
+% this function generates a transition triggered average of IBE while subtracting the pre-transition
+% state bias
+
+function hError = generateTTAPlot(subArray,lightDat,behave,color,light)
+
+
+null = nan(size(subArray,1),2);
+timeBin = 1.5;
+dEnd = [-6:1.5:15];
+tbs = nan(size(subArray,1),2,length(dEnd)-1);
+
+for jj = 1:size(subArray,1)
+    [x1,x2,tt] = calculateRelativeTime(subArray{jj,2},lightDat);
+    
+    tStamps = subArray{jj,2};
+    if light
+        ind = tStamps>120*60 & tStamps<=200*60 & x2;
+    elseif ~light
+        ind = tStamps>120*60 & tStamps<=200*60 & ~x2;
+    end
+    tStamps = tStamps(ind);
+    x = x1(ind);
+    walls = subArray{jj,10}(ind);
+    y = subArray{jj,1}(ind);
+    darkBias = [subArray{jj,13}(15+behave) subArray{jj,14}(15+behave)];
+    lightBias = [subArray{jj,13}(10+behave) subArray{jj,14}(10+behave)];
+    
+    
+    if light
+        null(jj,:) = darkBias;
+    elseif ~light
+        null(jj,:) = lightBias;
+    end
+
+    for ii = 1:(length(dEnd)-1)
+        sInd = x >= dEnd(ii) & x < dEnd(ii)+timeBin;
+        tS = tStamps(sInd);
+        turnVect = y(sInd);
+        ws = walls(sInd);
+        if length(turnVect)>10
+            switch behave
+                case 1
+                    if light
+                        div = (timeBin*sum(tt(:,2)));
+                    elseif ~light
+                        div = (timeBin*sum(~tt(:,2)));
+                    end
+                    tbs(jj,:,ii) = [length(turnVect)/div 0.01];
+                case 2
+                    tbs(jj,:,ii) = turnbias(turnVect);
+                case 3
+                    tbs(jj,:,ii) = switchiness(turnVect,lightDat,tS);
+                case 4
+                    tbs(jj,:,ii) = wallDist(ws,turnVect);
+                case 5
+                    tbs(jj,:,ii) = clumpiness(tS,lightDat);
+            end
+        end
+    end
+    
+    
+    % plot(dEnd,tbs-nanmean(tbs(1:((length(dEnd)-1)/2))))
+    % hold on
+end
+
+numRe = 1000;
+ibes = nan(numRe,length(dEnd)-1);
+
+    for ii = 1:(length(dEnd)-1)
+        data = [null(:,1),tbs(:,1,ii)];
+        error = [null(:,2),tbs(:,2,ii)];
+        
+        idx = all(~isnan([data error]),2);
+        data = data(idx,:);
+        error = error(idx,:);
+        ibes(:,ii) = bootstrp(numRe,@(x,y) IBEV3(x,y),data,error);
+    end
+
+
+xVect = dEnd(1:(end-1))+diff([dEnd(1),dEnd(2)])/2;
+% hPlot = plot(xVect,nanmean(ibes));
+% set(hPlot(1),'Color','black','LineWidth',1)
+% hPatch2 = patch([xVect fliplr(xVect)],...
+%     [nanmean(ibes)+nanstd(ibes) fliplr(nanmean(ibes)-nanstd(ibes))],colors{num});
+% hPatch2.FaceAlpha = 0.5;
+
+alpha = 0.5;
+hError = errorbar(xVect,nanmean(ibes),nanstd(ibes),'LineStyle','none',...
+    'Marker','o','MarkerFaceColor','auto',...
+    'Color',[color alpha],'MarkerSize',10,'CapSize',8,'LineWidth',2);
+
+drawnow

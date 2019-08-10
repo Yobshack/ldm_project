@@ -1,0 +1,29 @@
+function calculateTDMStat(flyBehavior1,flyBehavior2,flyBehavior3,flyBehavior4,timeBin)
+
+% Turn biases
+x = flyBehavior1;
+y = flyBehavior2;
+
+% Turn rates
+xx = flyBehavior3;
+yy = flyBehavior4;
+
+% mean and variance normalize input vectors
+f = @(x) (x - nanmean(x))./nanstd(x);
+out.normalization = f;
+x = f(x);
+y = f(y);
+
+% Null Model = All animals are p = 0.5
+behave1 = flyBehavior1(:,1,1,1);
+turnsInLightLow = round(behave1*(times{2}(2)-times{2}(1))/2);  % turns in 30 mins;
+behave2 = flyBehavior1(:,1,1,2);
+turnsInLightHigh = round(behave2*(times{2}(2)-times{2}(1))/2);
+nullLDM = nan(numRe,1);
+for jj = 1:numRe
+    nullLightLow = binornd(turnsInLightLow,0.5)./turnsInLightLow;
+    nullLightLow = (nullLight - 0.5)./normVals1(2);
+    nullLightHigh = binornd(turnsInLightHigh,0.5)./turnsInLightHigh;
+    nullLightHigh = (nullDark - 0.5)./normVals2(2);
+    nullLDM(jj) = nanvar(nullLight-nullDark);
+end
