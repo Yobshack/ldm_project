@@ -6,9 +6,8 @@
 
 % opens a ui to select mat files to analyze
 fullPath = pwd;
-file_path = '~/git/ldm_project/raw_data/15_min_bins/';
+file_path = '~/git/ldm_project/raw_data/15_min_bins'
 files = dir([file_path,'*.mat']);
-files = files{1};
 if iscell(files) ~= 1
     files = {files};
 end
@@ -31,7 +30,7 @@ toc
 
 %% Make large cell array to handle all data that I can query for groups
 
-files = dir([file_path,'*processed.mat']);
+files = uigetfile('*.mat','MultiSelect','on');
 [allDataCell, cellColNames] = parseProcessedFiles(files);
 
 %% Calculate behavioral metrics

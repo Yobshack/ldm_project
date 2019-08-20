@@ -7,14 +7,14 @@
 % every fly
 
 
-function [out, out2] = parseProcessedFiles(files)
+function [out, out2] = parseProcessedFiles(files,file_path)
 
 tmpC = cell(0);
 for ii = 1:length(files)
     if iscell(files)
-        load(files{ii})
+        load([file_path,files{ii}])
     elseif isstruct(files)
-        load(files(ii).name)
+        load([file_path,files(ii).name])
     end
     ii
     % need to heal a few of the labels files because the number of roi's was not 120 on some trays
