@@ -1,0 +1,74 @@
+function out=ldmFig4I(data,rot,moment,flip)
+
+% sort out data
+ind=data{5};
+times=data{1};
+ca=data{2};
+yaw=data{3};
+pitch=data{4};
+flip_ind = data{8};
+numFlies=max(ind);
+numTrials=size(ca,1);
+
+% added this section to flip R neurons to left
+% flip right axon to left
+if flip
+    yaw(flip_ind,:) = -yaw(flip_ind,:);
+end
+
+% which behavior is being analyzed?
+switch rot
+    case 'yaw'
+        rot=-yaw;
+    case 'pitch'
+        rot=pitch;
+    case 'turn'
+        rot=abs(yaw);
+end
+
+%analysis parameters
+lightEdgeTrim=100;
+lightWindow=500+lightEdgeTrim:1100;
+caNormWindow=300:500;
+
+out.resp=zeros(numTrials,1);
+out.beh=zeros(numTrials,1);
+
+for i=1:numTrials
+    % calculate the behavior measure
+    rot_i=rot(i,:);
+    rot_light=rot_i(lightWindow);
+    rot_dark=rot_i; rot_dark(lightWindow)=[];
+    switch moment
+        case 'raw'
+            out.beh(i)=nansum(rot_light); % modified to correct a bug i think
+        case 'ildm'
+            out.beh(i)=nansum(rot_light)/nansum(abs(rot_light)) - nansum(rot_dark)/nansum(abs(rot_dark));
+    end
+    
+    %calculate the Ca response
+    ca_i=ca(i,:);
+    ca_i=ca_i-mean(ca_i(caNormWindow)); %subtract off the baseline immediately before lights on
+    out.resp(i)=nanmean(ca_i(lightWindow));
+    
+end
+
+plotBool=1;
+
+% plot if wanted
+if plotBool==1
+
+    scatter(out.resp,out.beh);
+    hold on
+%     lims = xlim;
+%     x = lims(1):(range(lims)/100):lims(2)
+%     [a,b] = polyfit(out.resp,out.beh,1);
+%     [l,d] = polyval(a,x,b);
+%     plot(x,l+d)
+%     plot(x,l-d)
+    disp(corr(out.resp,out.beh));
+    pbaspect([1 1 1]);
+    hold on
+    scatter(out.resp,out.beh,'.','CData',[0 0 0]);
+    shg;
+end

@@ -6,20 +6,15 @@
 
 %% Select files to analyze
 
+file_path = '../raw_data/60s_bins/';
+
 % opens a ui to select mat files to analyze
 fullPath = pwd;
-files = uigetfile('*.mat','MultiSelect','on');
+files = uigetfile([file_path,'*.mat'],'MultiSelect','on');
 if iscell(files) ~= 1
     files = {files};
 end
 
-% loads an experimental design file, script expects a n x 3 array where n is the number of bins in
-% the stimulus sequence. col 1 is the bin length in seconds, col 2 is a logical vector indicating
-% whether the `lights were on or off in that bin. col 3 is a vector of pwm values that reflect the
-% pwm setting of the arduino controlling the led light board.
-lightDat = dlmread('lightSequence_60s.txt');
-lightDat = [lightDat;lightDat(end,:)];
-lightDat(end,1) = lightDat(end,1)*10;
 tic
 %turnDirs = batch(clust,@extractTurns,1,{files,lightDat});
 toc
@@ -27,25 +22,29 @@ toc
 %turnDirs = cell(0);
 tic
 for ii = 1:length(files)
-    load(files{ii})
-    turnDirs = extractTurns(flyTracks,files{ii},lightDat);
+    f_name = [file_path,files{ii}];
+    load(f_name) 
+    turnDirs = extractTurns(flyTracks,f_name,lightDat);
     toc
-    save(strcat(files{ii}(1:(end-4)),'_processed.mat'),'turnDirs')
+    save([file_path,strcat(files{ii}(1:(end-4)),'_processed.mat')],'turnDirs')
+ii
 end
 toc
 
 %% Make large cell array to handle all data that I can query for groups
 
-files = uigetfile('*.mat','MultiSelect','on');
-[allDataCell, cellColNames] = parseProcessedFiles(files);
+lightDat = dlmread('lightSequence_60s.txt');
+lightDat = [lightDat;lightDat(end,:)];
+lightDat(end,1) = lightDat(end,1)*10;
 
+files = dir([file_path,'*processed.mat']);
 
-array = allDataCell;
-
-array(:,3) = upper(array(:,3));
+[allDataCell, cellColNames] = parseProcessedFiles(files,file_path);
 
 
 %% Generate a transition triggered average
+
+array = allDataCell;
 
 idx1 = strcmp(array(:,3),'CS');
 idx2 = strcmp(array(:,3),'SOMA');
@@ -141,4 +140,9 @@ n = size(bias,1);
 eles = {'dark_to_light_ldm','time_vector','n','eles'};
 LDM_FigureS1F = {reshaped_ldm,time,n,eles};
 save('LDM_FigureS1F.mat','LDM_FigureS1F')
+
+n = size(bias,1);
+eles = {'light_to_dark_ldm','time_vector','n','eles'};
+LDM_FigureS1G = {reshaped_ldm([31:60 1:30],:),time,n,eles};
+save('LDM_FigureS1G.mat','LDM_FigureS1G')
 

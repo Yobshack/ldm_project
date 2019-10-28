@@ -6,6 +6,9 @@
 
 % opens a ui to select mat files to analyze
 fullPath = pwd;
+
+filepath = '/Users/kyobikakaria/git/ldm_project/raw_data/split_data/';
+cd(filepath)
 files = uigetfile('*.mat','MultiSelect','on');
 if iscell(files) ~= 1
     files = {files};
@@ -35,8 +38,9 @@ toc
 %% Neuron annotation file
 
 % import rubin annotation
-filepath = '/Volumes/LaCie/Data/split_screen/split_Gal4/split_Rubin_Annotation.csv';
-importedData = importdata(filepath);
+filepath = '/Users/kyobikakaria/git/ldm_project/resources/';
+filename = 'split_Rubin_Annotation.csv';
+importedData = importdata(fullfile(filepath,filename));
 
 names = importedData.textdata(2:end,1);
 genonames = importedData.textdata(1,2:end);
@@ -49,7 +53,7 @@ shorterNames = {'P-FN_M/P','P-FN_A','P-FN_D','P-FN_V','P-EN','P-EG','E-PG','E-PG
 names(1:length(shorterNames)) = shorterNames;
 
 % image of neurons by drivers included in screen
-sub = importedData.data(:,[1:47 81:91]);
+sub = importedData.data(:,[1:47 81:92]);
 id = nan(size(sub,2),1);
 for ii = 1:size(sub,2)
     try
@@ -66,8 +70,9 @@ shg
 
 %% Make large cell array to handle all data that I can query for groups
 
-files = dir('*_processed.mat');
-[allDataCell, cellColNames] = parseProcessedFiles(files);
+filepath = '/Users/kyobikakaria/git/ldm_project/raw_data/split_data/';
+files = dir(fullfile(filepath,'*_processed.mat'));
+[allDataCell, cellColNames] = parseProcessedFiles(files,filepath);
 
 
 %% Calculate behavioral metrics
@@ -78,11 +83,10 @@ times = {[0 60]*60,[120 180]*60};
 turnFilter = 50;
 bins = 1;
 allData = cell(0); allError = allData;
-for hh = 1:size(allDataCell,1)
+parfor hh = 1:size(allDataCell,1)
     hh
     [allData{hh}, allError{hh}] = generateBehavioralMetrics3(allDataCell(hh,:),lightDat,times,...
         bins,turnFilter);
-    hh
 end
 
 array = allDataCell;
@@ -100,23 +104,24 @@ array(strcmp(array(:,3),'Rh1-Gal4'),3) = cellstr('Rh1');
 array(strcmp(array(:,3),'Rh3-Gal4'),3) = cellstr('Rh3');
 array(strcmp(array(:,3),'Rh4-Gal4'),3) = cellstr('Rh4');
 array(strcmp(array(:,3),'Rh5-Gal4'),3) = cellstr('Rh5');
+array(strcmp(array(:,3),'Iso'),3) = cellstr('IsoKH11');
 
 array(:,3) = upper(array(:,3));
 
-save('LDM_Analysis.mat','array')
+filepath = '/Users/kyobikakaria/git/ldm_project/working/';
+save(fullfile(filepath,'check_screen.mat'),'array')
 
-clear
 
 %% Load saved analysis .mat file
-
-load('LDM_Analysis.mat')
+filepath = '/Users/kyobikakaria/git/ldm_project/working/';
+load(fullfile(filepath,'check_screen.mat'),'array')
 
 
 %% Make draft of Figure 1N
 % Sets neuron index
 clear n groups
 
-separate_by_driver = true;
+separate_by_driver = false;
 eff1 = 'SHI'; % TRP for dTrpA1, % SHI for shibire
 eff2 = 'ISO';
 numRe = 10000;
@@ -131,141 +136,157 @@ c = 1;
 
 for kk = 1:23
     
-        genoN = kk;
+    genoN = kk;
+    
+    % Sets behavior index 1 = activity, 2 = turn bias, 3 = switchiness,
+    % 4 = wall following, 5 = clumpiness
+    behave = 1;
+    
+    % retrieve effectors
+    effectors = array(:,4);
+    
+    % retrieve all genotypes that are part of the neuron label
+    ngn = genonames(logical(importedData.data(genoN,:)));
+    if kk <= 16
+        ngn = ngn(~contains(ngn,'R'));
+    end
+    
+    
+    
+    
+    if separate_by_driver
+        num_drivers = length(ngn);
+    else
+        num_drivers = 1;
+    end
+    
+    for ii = 1:num_drivers
         
-        % Sets behavior index 1 = activity, 2 = turn bias, 3 = switchiness,
-        % 4 = wall following, 5 = clumpiness
-        behave = 2;
-        
-        % retrieve effectors
-        effectors = array(:,4);
-        
-        % retrieve all genotypes that are part of the neuron label
-        ngn = genonames(logical(importedData.data(genoN,:)));
-        if kk <= 16
-            ngn = ngn(~contains(ngn,'R'));
-        end
         
         
-        
-              
+        % Set index for specific experiment for shibire and control
         if separate_by_driver
-            num_drivers = length(ngn);
+            idx1 = ismember(upper(array(:,3)),ngn{ii}) & ismember(effectors,eff1);
+            idx2 = ismember(upper(array(:,3)),ngn{ii}) & ismember(effectors,eff2);
+            if contains(ngn,'ISOKH11')
+                idx2 = ismember(effectors,eff2);
+            end
+            if sum(idx1) <= 50  || sum(idx2) <= 50 && any(~contains(ngn,'ISOKH11'))
+                continue
+            end
+            %                 end
         else
-            num_drivers = 1;
-        end
-        
-        for ii = 1:num_drivers
-       
-            
-            
-            % Set index for specific experiment for shibire and control
-            if separate_by_driver
-                idx1 = ismember(upper(array(:,3)),ngn{ii}) & ismember(effectors,eff1);
-                idx2 = ismember(upper(array(:,3)),ngn{ii}) & ismember(effectors,eff2);
-                 if sum(idx1) <= 50  || sum(idx2) <= 50
-                     continue
-                 end
-            else
-                idx1 = cell(0);
-                idx2 = cell(0);
-                for hh = 1:length(ngn)                   
-                    idx1{hh} = ismember(upper(array(:,3)),ngn{hh}) & ismember(effectors,eff1);
-                    idx2{hh} = ismember(upper(array(:,3)),ngn{hh}) & ismember(effectors,eff2);
-                    
-                    if sum(idx1{hh}) <= 50  || sum(idx2{hh}) <= 50 
-                        idx1{hh} = false(length(idx1{hh}),1);
-                        idx2{hh} = idx1{hh};
-                    end                  
-                end
+            idx1 = cell(0);
+            idx2 = cell(0);
+            for hh = 1:length(ngn)
+                idx1{hh} = ismember(upper(array(:,3)),ngn{hh}) & ismember(effectors,eff1);
+                idx2{hh} = ismember(upper(array(:,3)),ngn{hh}) & ismember(effectors,eff2);
                 
-                idx1 = any(cell2mat(idx1),2);
-                idx2 = any(cell2mat(idx2),2);            
+                if sum(idx1{hh}) <= 50  || sum(idx2{hh}) <= 50 && ~contains(ngn{hh},'ISOKH11')
+                    idx1{hh} = false(length(idx1{hh}),1);
+                    idx2{hh} = idx1{hh};
+                end
             end
             
-            flyBehavior1 = cat(1,array{idx1,13});
-            flyBehavior2 = cat(1,array{idx2,13});
-            flyError1 = cat(1,array{idx1,14});
-            flyError2 = cat(1,array{idx2,14});
-            
-            % Experimental basic stats
-            bias = [flyBehavior1(:,2,1,time),...
-                flyBehavior1(:,2,2,time)];
-            activity = round([flyBehavior1(:,1,1,time) * 60 * 30,...
-                flyBehavior1(:,1,2,time) * 60 * 30]); % needs to be manually edited if time bins are changed at the moment
-            bias_turns_experiment{c,1} = [bias,activity];
-            
-       
-            % Control basic stats
-            bias = [flyBehavior2(:,2,1,time),...
-                flyBehavior2(:,2,2,time)];
-            activity = round([flyBehavior2(:,1,1,time) * 60 * 30,...
-                flyBehavior2(:,1,2,time) * 60 * 30]); % needs to be manually edited if time bins are changed at the moment
-            bias_turns_control{c,1} = [bias,activity];      
-            
-            
-            % EXPERIMENTAL GROUP
-            
-            % Set turn bias to variable and zscore turn biases
-            normVals1 = [nanmean(flyBehavior1(:,2,1,time)),nanstd(flyBehavior1(:,2,1,time))];
-            turnBiasInLight = (flyBehavior1(:,2,1,time) - normVals1(1))./normVals1(2);
-            turnBiasInLightError = (flyError1(:,2,2,time))./normVals1(2);
-            normVals2 = [nanmean(flyBehavior1(:,2,2,time)),nanstd(flyBehavior1(:,2,2,time))];
-            turnBiasInDark = (flyBehavior1(:,2,2,time) - normVals2(1))./normVals2(2);
-            turnBiasInDarkError = (flyError1(:,2,2,time))./normVals2(2);
-            
-
-            
-            % Subtract expected standard error
-            nullLDMErr = nanmean(turnBiasInLightError.^2 + turnBiasInDarkError.^2);
-            
-            % Calculate LDM by taking variance of LDM and subtracting null variance
-            ldmDistribution = turnBiasInLight - turnBiasInDark;
-            ldmCorrected_exp = sqrt(nanvar(ldmDistribution) - nullLDMErr);
-            ldmCorrectedE_exp = bootstrp(numRe,@(x) sqrt(nanvar(x) - nullLDMErr),...
-                ldmDistribution);
-            
-            % CONTROL GROUP
-            
-            % Set turn bias to variable
-            normVals1 = [nanmean(flyBehavior2(:,2,1,time)),nanstd(flyBehavior2(:,2,1,time))];
-            turnBiasInLight = (flyBehavior2(:,2,1,time) - normVals1(1))./normVals1(2);
-            turnBiasInLightError = (flyError2(:,2,2,time))./normVals1(2);
-            normVals2 = [nanmean(flyBehavior2(:,2,2,time)),nanstd(flyBehavior2(:,2,2,time))];
-            turnBiasInDark = (flyBehavior2(:,2,2,time) - normVals2(1))./normVals2(2);
-            turnBiasInDarkError = (flyError2(:,2,2,time))./normVals2(2);
-      
-            % Subtract expected standard error
-            nullLDMErr = nanmean(turnBiasInLightError.^2 + turnBiasInDarkError.^2);
-            
-            % Calculate LDM by taking variance of LDM and subtracting null variance
-            ldmDistribution = turnBiasInLight - turnBiasInDark;
-            ldmCorrected_ctl = sqrt(nanvar(ldmDistribution) - nullLDMErr);
-            ldmCorrectedE_ctl = bootstrp(numRe,@(x) sqrt(nanvar(x) - nullLDMErr),...
-                ldmDistribution);
-            
-            
-            ldmDeltaDist{c} = (ldmCorrectedE_exp - ldmCorrectedE_ctl)./ldmCorrectedE_ctl;
-            ldm_experimental_groups{c} = [ldmCorrectedE_exp,ldmCorrectedE_ctl];
-
-            
-            geno_names{c} = ngn{ii};
-            
-            
-            % Get N's for each experimental group
-            n(c,:) = [sum(idx1),sum(idx2)]
-            kk
-            
-
-            % Set group vector
-            groups(c) = kk;
-            c = c+1;
-
-            
-        
-        
+            idx1 = any(cell2mat(idx1),2);
+            idx2 = any(cell2mat(idx2),2);
+            if sum(idx1) <= 50  || sum(idx2) <= 50 && any(~contains(ngn,'ISOKH11'))
+                continue
+            end
         end
+        
+        flyBehavior1 = cat(1,array{idx1,13});
+        flyBehavior2 = cat(1,array{idx2,13});
+        flyError1 = cat(1,array{idx1,14});
+        flyError2 = cat(1,array{idx2,14});
+        
+        % Experimental basic stats
+        bias = [flyBehavior1(:,2,1,:),...
+            flyBehavior1(:,2,2,:)];
+        bias = squeeze(reshape(bias,size(bias,1),4));
+        bias = [nanmean(bias(:,[1:2]),2),nanmean(bias(:,[3:4]),2)];
+        activity = round([flyBehavior1(:,1,1,:) * 60 * 30,...
+            flyBehavior1(:,1,2,:) * 60 * 30]); % needs to be manually edited if time bins are changed at the moment
+        activity = squeeze(reshape(activity,size(activity,1),4));
+        activity = [nansum(activity(:,1:2),2),nansum(activity(:,3:4),2)];
+        bias_turns_experiment{c,1} = [activity,bias];
+        
+        
+        % Control basic stats
+        bias = [flyBehavior2(:,2,1,:),...
+            flyBehavior2(:,2,2,:)];
+        bias = squeeze(reshape(bias,size(bias,1),4));
+        bias = [nanmean(bias(:,[1:2]),2),nanmean(bias(:,[3:4]),2)];
+        activity = round([flyBehavior2(:,1,1,:) * 60 * 30,...
+            flyBehavior2(:,1,2,:) * 60 * 30]); % needs to be manually edited if time bins are changed at the moment
+        activity = squeeze(reshape(activity,size(activity,1),4));
+        activity = [nansum(activity(:,1:2),2),nansum(activity(:,3:4),2)];
+        bias_turns_control{c,1} = [activity,bias];
+        
+        
+        % EXPERIMENTAL GROUP
+        
+        % Set turn bias to variable and zscore turn biases
+        normVals1 = [nanmean(flyBehavior1(:,2,1,time)),nanstd(flyBehavior1(:,2,1,time))];
+        turnBiasInLight = (flyBehavior1(:,2,1,time) - normVals1(1))./normVals1(2);
+        turnBiasInLightError = (flyError1(:,2,2,time))./normVals1(2);
+        normVals2 = [nanmean(flyBehavior1(:,2,2,time)),nanstd(flyBehavior1(:,2,2,time))];
+        turnBiasInDark = (flyBehavior1(:,2,2,time) - normVals2(1))./normVals2(2);
+        turnBiasInDarkError = (flyError1(:,2,2,time))./normVals2(2);
+        
+        
+        
+        % Subtract expected standard error
+        nullLDMErr = nanmean(turnBiasInLightError.^2 + turnBiasInDarkError.^2);
+        
+        % Calculate LDM by taking variance of LDM and subtracting null variance
+        ldmDistribution = turnBiasInLight - turnBiasInDark;
+        ldmCorrected_exp = sqrt(nanvar(ldmDistribution) - nullLDMErr);
+        ldmCorrectedE_exp = bootstrp(numRe,@(x) sqrt(nanvar(x) - nullLDMErr),...
+            ldmDistribution);
+        
+        % CONTROL GROUP
+        
+        % Z score
+        normVals1 = [nanmean(flyBehavior2(:,2,1,time)),nanstd(flyBehavior2(:,2,1,time))];
+        turnBiasInLight = (flyBehavior2(:,2,1,time) - normVals1(1))./normVals1(2);
+        turnBiasInLightError = (flyError2(:,2,2,time))./normVals1(2);
+        normVals2 = [nanmean(flyBehavior2(:,2,2,time)),nanstd(flyBehavior2(:,2,2,time))];
+        turnBiasInDark = (flyBehavior2(:,2,2,time) - normVals2(1))./normVals2(2);
+        turnBiasInDarkError = (flyError2(:,2,2,time))./normVals2(2);
+        
+        % Subtract expected standard error
+        nullLDMErr = nanmean(turnBiasInLightError.^2 + turnBiasInDarkError.^2);
+        
+        % Calculate LDM by taking variance of LDM and subtracting null variance
+        ldmDistribution = turnBiasInLight - turnBiasInDark;
+        ldmCorrected_ctl = sqrt(nanvar(ldmDistribution) - nullLDMErr);
+        ldmCorrectedE_ctl = bootstrp(numRe,@(x) sqrt(nanvar(x) - nullLDMErr),...
+            ldmDistribution);
+        
+        
+        ldmDeltaDist{c} = (ldmCorrectedE_exp - ldmCorrectedE_ctl)./ldmCorrectedE_ctl;
+        ldm_experimental_groups{c} = [ldmCorrectedE_exp,ldmCorrectedE_ctl];
+        
+        
+        geno_names{c} = ngn{ii};
+        
+        
+        % Get N's for each experimental group
+        n(c,:) = [sum(idx1),sum(idx2)]
+        kk
+        
+        % Calculate p values
+        p(c) = sum(ldmDeltaDist{c} > 0)/numRe;
+        
+        % Set group vector
+        groups(c) = kk;
+        c = c+1;
+        
+        
+        
     end
+end
 
 
 
@@ -275,12 +296,12 @@ line([0 length(ldmDeltaDist)+1],[0 0],'color',[0.5 0.5 0.5])
 data = ldmDeltaDist;
 
 for ii = 1:length(data)
-        x = groups(ii)+rand*0.15;
-        y_dat = median(data{ii});
-        y_err = std(data{ii});
-        hBar = errorbar(x,y_dat,y_err,'Marker','o','MarkerFaceColor','white','CapSize',0,...
-            'MarkerSize',15,'LineWidth',1,'Color','black');
-        hold on
+    x = groups(ii)+rand*0.15;
+    y_dat = median(data{ii});
+    y_err = std(data{ii});
+    hBar = errorbar(x,y_dat,y_err,'Marker','o','MarkerFaceColor','white','CapSize',0,...
+        'MarkerSize',15,'LineWidth',1,'Color','black');
+    hold on
 end
 hold off
 shg
@@ -306,27 +327,27 @@ gal4s = geno_names;
 if separate_by_driver
     
     eles = {'data_resamples','medians','neuron_names','n','groups','gal4s','eles'};
-    eles_2 = {{'tb_light_experiment','tb_dark_experiment',...
-        'turns_light_experiment','turns_dark_experiment'},{'tb_light_control','tb_dark_control',...
-        'turns_light_control','turns_dark_control'},...
-        eles{3:end}};
+    eles_2 = {{'Experiment',{'num_turns_23','num_turns_32',...
+        'tb_23','tb_32'}},...
+        {'Control',{'num_turns_23','num_turns_32',...
+        'tb_23','tb_32'}},eles{[3,6,4]}};
     if strcmp(eff1,'SHI')
         LDM_FigureS2C_Shi = {data,medians,names,n,groups,gal4s,eles};
-        save('LDM_FigureS2C_Shi.mat','LDM_FigureS2C_Shi')       
-        LDM_FigureS2AB_Shi= {bias_turns_experiment,bias_turns_control,eles_2};
-        save('LDM_FigureS2AB_Shi.mat','LDM_FigureS2AB_Shi') 
+        save('LDM_FigureS2C_Shi.mat','LDM_FigureS2C_Shi')
+        LDM_FigureS2AB_Shi= {bias_turns_experiment,bias_turns_control,names(groups),gal4s',n,eles_2};
+        save('LDM_FigureS2AB_Shi.mat','LDM_FigureS2AB_Shi')
     else
         LDM_FigureS2C_Trp = {data,medians,names,n,groups,gal4s,eles};
         save('LDM_FigureS2C_Trp.mat','LDM_FigureS2C_Trp')
-        LDM_FigureS2AB_Trp= {bias_turns_experiment,bias_turns_control,eles_2};
+        LDM_FigureS2AB_Trp= {bias_turns_experiment,bias_turns_control,names(groups),gal4s',n,eles_2};
         save('LDM_FigureS2AB_Trp.mat','LDM_FigureS2AB_Trp')
     end
     
 else
-
+    
     eles = {'data_resamples','medians','neuron_names','n','gal4s','eles'};
     if strcmp(eff1,'SHI')
-        LDM_Figure2c = {data_temp,medians,names,n,gal4s,eles};
+        LDM_Figure2c = {data,medians,names,n,gal4s,eles};
         save('LDM_Figure2c.mat','LDM_Figure2c')
     else
         LDM_Figure2d = {data,medians,names(groups),n,gal4s,eles};
@@ -338,10 +359,10 @@ end
 
 %%
 
-rh1 = cell2mat(cellfun(@(x) [median(x),std(x)],ldm_experimental_groups(groups == 20),'Un',0)'); 
-rh7 = cell2mat(cellfun(@(x) [median(x),std(x)],ldm_experimental_groups(groups == 21),'Un',0)'); 
-lpsp = cell2mat(cellfun(@(x) [median(x),std(x)],ldm_experimental_groups(groups == 12),'Un',0)'); 
-epg = cell2mat(cellfun(@(x) [median(x),std(x)],ldm_experimental_groups(groups == 7),'Un',0)'); 
+rh1 = cell2mat(cellfun(@(x) [median(x),std(x)],ldm_experimental_groups(groups == 20),'Un',0)');
+rh7 = cell2mat(cellfun(@(x) [median(x),std(x)],ldm_experimental_groups(groups == 21),'Un',0)');
+lpsp = cell2mat(cellfun(@(x) [median(x),std(x)],ldm_experimental_groups(groups == 12),'Un',0)');
+epg = cell2mat(cellfun(@(x) [median(x),std(x)],ldm_experimental_groups(groups == 7),'Un',0)');
 delta7 = cell2mat(cellfun(@(x) [median(x),std(x)],ldm_experimental_groups(groups == 14),'Un',0)');
 pflc = cell2mat(cellfun(@(x) [median(x),std(x)],ldm_experimental_groups(groups == 11),'Un',0)');
 
@@ -349,7 +370,7 @@ raw = cell(0);
 n_temp = cell(0);
 for ii = 1:23
     raw{ii} = cell2mat(cellfun(@(x) [median(x),std(x)],...
-        ldm_experimental_groups(groups == ii),'Un',0)'); 
+        ldm_experimental_groups(groups == ii),'Un',0)');
     subplot(5,5,ii)
     dat = raw{ii};
     
@@ -373,15 +394,15 @@ LDM_Figure2e = {data,error,names,groups,geno_names,n_temp,eles};
 save('LDM_Figure2e.mat','LDM_Figure2e')
 
 
-% subplot(1,6,1)
-% dat = rh1;
-% for ii = 1:size(dat,1)
-% errorbar(dat(ii,1:2),dat(ii,3:4))
-% hold on
-% end
-% hold off
-% xlim([0.5 2.5])
-% 
+subplot(1,6,1)
+dat = rh1;
+for ii = 1:size(dat,1)
+errorbar(dat(ii,1:2),dat(ii,3:4))
+hold on
+end
+hold off
+xlim([0.5 2.5])
+
 % subplot(1,6,2)
 % dat = rh7;
 % for ii = 1:size(dat,1)
@@ -390,7 +411,7 @@ save('LDM_Figure2e.mat','LDM_Figure2e')
 % end
 % hold off
 % xlim([0.5 2.5])
-% 
+%
 % subplot(1,6,3)
 % dat = lpsp;
 % for ii = 1:size(dat,1)
@@ -399,8 +420,8 @@ save('LDM_Figure2e.mat','LDM_Figure2e')
 % end
 % hold off
 % xlim([0.5 2.5])
-% 
-% 
+%
+%
 % subplot(1,6,4)
 % dat = epg;
 % for ii = 1:size(dat,1)
@@ -409,7 +430,7 @@ save('LDM_Figure2e.mat','LDM_Figure2e')
 % end
 % hold off
 % xlim([0.5 2.5])
-% 
+%
 % subplot(1,6,5)
 % dat = delta7;
 % for ii = 1:size(dat,1)
@@ -418,8 +439,8 @@ save('LDM_Figure2e.mat','LDM_Figure2e')
 % end
 % hold off
 % xlim([0.5 2.5])
-% 
-% 
+%
+%
 % subplot(1,6,6)
 % dat = pflc;
 % for ii = 1:size(dat,1)
@@ -428,8 +449,8 @@ save('LDM_Figure2e.mat','LDM_Figure2e')
 % end
 % hold off
 % xlim([0.5 2.5])
-% 
-% 
+%
+%
 % shg
 
 %% Figure 3d and 3e
@@ -438,10 +459,10 @@ save('LDM_Figure2e.mat','LDM_Figure2e')
 % Sets neuron index
 allLines = cell(0);
 allBehave = cell(0);
-        eff1 = 'SHI';
-        eff2 = 'ISO';
-        numRe = 10000;
-         
+eff1 = 'SHI';
+eff2 = 'ISO';
+numRe = 10000;
+
 actFilter = 0.02; % turns per second
 flyN = nan(23,2);
 
@@ -452,7 +473,7 @@ geno_names = cell(0);
 n = nan(1,2);
 groups = zeros(1);
 
-separate_by_driver = true;
+separate_by_driver = false;
 c = 1;
 count = 1;
 
@@ -573,12 +594,11 @@ for kk = 1:23
             biases = flyBiases1(index,:);
             
             mean_shifts = mean(biases) - mean(biases)';
-            %                     mean_shifts = zeros(size(mean_shifts));
             
-            [a,b] = min(abs(biases(:,3) - biases(:,1:2) + mean_shifts(3,1:2)),...
+            [a,b] = max(abs(biases(:,3) - biases(:,1:2) + mean_shifts(3,1:2)),...
                 [],2);
             iLDM_exp_light = nanmean(b==1);
-            [a,b] = min(abs(biases(:,4) - biases(:,1:2) + mean_shifts(4,1:2)),...
+            [a,b] = max(abs(biases(:,4) - biases(:,1:2) + mean_shifts(4,1:2)),...
                 [],2);
             iLDM_exp_dark = nanmean(b==2);
             
@@ -587,12 +607,11 @@ for kk = 1:23
             biases = flyBiases2(index,:);
             
             mean_shifts = mean(biases) - mean(biases)';
-            %                     mean_shifts = zeros(size(mean_shifts));
             
-            [a,b] = min(abs(biases(:,3) - biases(:,1:2) + mean_shifts(3,1:2)),...
+            [a,b] = max(abs(biases(:,3) - biases(:,1:2) + mean_shifts(3,1:2)),...
                 [],2);
             iLDM_ctl_light = nanmean(b==1);
-            [a,b] = min(abs(biases(:,4) - biases(:,1:2) + mean_shifts(4,1:2)),...
+            [a,b] = max(abs(biases(:,4) - biases(:,1:2) + mean_shifts(4,1:2)),...
                 [],2);
             iLDM_ctl_dark = nanmean(b==2);
             
@@ -625,7 +644,7 @@ for kk = 1:23
         iLDM_dark = sum(abs(corr(flyBiases1(:,1:2),flyBiases1(:,4),'type','Spearman')' - ...
             corr(flyBiases2(:,1:2),flyBiases2(:,4),'type','Spearman')'));
         
-        scores = [iLDM_light iLDM_dark]
+        scores = [iLDM_light iLDM_dark];
         scores_V2{c} = scores;
         kk
         
@@ -637,7 +656,7 @@ for kk = 1:23
         geno_names{c} = ngn{ii};
         
         % Get N's for each experimental group
-        n(c,:) = [sum(idx1),sum(idx2)]
+        n(c,:) = [sum(idx1),sum(idx2)];
         
         % Set group vector
         groups(c) = kk;
@@ -680,7 +699,7 @@ for ii = 1:length(allScores)
     end
 end
 
-geno_difference_scores = allScores_reshaped(:,[3 4],:) - allScores_reshaped(:,[1 2],:);
+geno_difference_scores = allScores_reshaped(:,[1 2],:) - allScores_reshaped(:,[3 4],:);
 
 
 
@@ -717,7 +736,7 @@ scatter(median_dark,median_light)
 if separate_by_driver
     text(median_dark,median_light,gal4s)
 else
-text(median_dark,median_light,names(groups))
+    text(median_dark,median_light,names(groups))
 end
 pbaspect([1 1 1])
 
@@ -771,12 +790,12 @@ LDM_Figure3a_pflc = [data,genotype,eles];
 save('LDM_Figure3a_pflc.mat','LDM_Figure3a_pflc')
 
 if separate_by_driver
-   
+    
     for ii = 1:2
         ngn = {'SS02252','SS00090'};
         idx1 = ismember(upper(array(:,3)),ngn(ii)) & ismember(effectors,eff1);
         idx2 = ismember(upper(array(:,3)),ngn(ii)) & ismember(effectors,eff2);
-    
+        
         % Extract turn biases for each genotype
         flyBehavior1 = cat(1,array{idx1,13});
         flyError1 = cat(1,array{idx1,14});
@@ -794,7 +813,7 @@ if separate_by_driver
         flyBiases1 = flyBiases1(noNans,:);
         
         flyBiases2 = reshape(flyBehavior2(:,2,:,:),size(flyBehavior2,1),4); % Low Light, Low Dark, High Light, High Dark
-       
+        
         noNans = all(~isnan(flyBiases2),2);
         flyBiases2 = flyBiases2(noNans,:);
         
@@ -812,7 +831,7 @@ if separate_by_driver
             save('LDM_Figure3a_epg.mat','LDM_Figure3a_epg')
         end
         
-    end 
+    end
     
     
 end
@@ -822,41 +841,41 @@ end
 
 
 for ii = 1:23
-subplot(5,10,(ii-1)*2+1)
-y_data = mean(allScores_reshaped(groups==ii,[1 3],:),3);
-y_error = nanstd(allScores_reshaped(groups==ii,[1 3],:),[],3);
-x_data = repmat([1,2],size(y_data,1),1);
-x_data = x_data+normrnd(0,0.05,size(x_data));
-
-color_1 = [0 0.5 1];
-errorbar(x_data',y_data',y_error','Color',color_1,...
-    'CapSize',0,'LineWidth',0.5,'Marker','o','MarkerSize',2,...
-    'MarkerFaceColor',color_1,'MarkerEdgeColor','auto')
-xlim([0 3])
-ylim([0.4 0.8])
-xticklabels({'Experiment','Control'})
-xticks(1:2)
-set(gca,'XTickLabelRotation',90)
-title(names(ii))
-shg
-
-subplot(5,10,(ii-1)*2+2)
-y_data = mean(allScores_reshaped(groups==ii,[2 4],:),3);
-y_error = nanstd(allScores_reshaped(groups==ii,[2 4],:),[],3);
-x_data = repmat([1,2],size(y_data,1),1);
-x_data = x_data+normrnd(0,0.05,size(x_data));
-
-color_1 = [1 0.15 0];
-errorbar(x_data',y_data',y_error','Color',color_1,...
-    'CapSize',0,'LineWidth',0.5,'Marker','o','MarkerSize',2,...
-    'MarkerFaceColor',color_1,'MarkerEdgeColor','auto')
-xlim([0 3])
-ylim([0.4 0.8])
-xticklabels({'Experiment','Control'})
-xticks(1:2)
-set(gca,'XTickLabelRotation',90)
-title(names(ii))
-shg
+    subplot(5,10,(ii-1)*2+1)
+    y_data = mean(allScores_reshaped(groups==ii,[1 3],:),3);
+    y_error = nanstd(allScores_reshaped(groups==ii,[1 3],:),[],3);
+    x_data = repmat([1,2],size(y_data,1),1);
+    x_data = x_data+normrnd(0,0.05,size(x_data));
+    
+    color_1 = [0 0.5 1];
+    errorbar(x_data',y_data',y_error','Color',color_1,...
+        'CapSize',0,'LineWidth',0.5,'Marker','o','MarkerSize',2,...
+        'MarkerFaceColor',color_1,'MarkerEdgeColor','auto')
+    xlim([0 3])
+    ylim([0.4 0.8])
+    xticklabels({'Experiment','Control'})
+    xticks(1:2)
+    set(gca,'XTickLabelRotation',90)
+    title(names(ii))
+    shg
+    
+    subplot(5,10,(ii-1)*2+2)
+    y_data = mean(allScores_reshaped(groups==ii,[2 4],:),3);
+    y_error = nanstd(allScores_reshaped(groups==ii,[2 4],:),[],3);
+    x_data = repmat([1,2],size(y_data,1),1);
+    x_data = x_data+normrnd(0,0.05,size(x_data));
+    
+    color_1 = [1 0.15 0];
+    errorbar(x_data',y_data',y_error','Color',color_1,...
+        'CapSize',0,'LineWidth',0.5,'Marker','o','MarkerSize',2,...
+        'MarkerFaceColor',color_1,'MarkerEdgeColor','auto')
+    xlim([0 3])
+    ylim([0.4 0.8])
+    xticklabels({'Experiment','Control'})
+    xticks(1:2)
+    set(gca,'XTickLabelRotation',90)
+    title(names(ii))
+    shg
 end
 %%
 

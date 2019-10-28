@@ -1,9 +1,10 @@
 function turnDirs = extractTurns(flyTracks,files, lightDat)
 
 %     load(strcat('./',files));
-    flyTracks.name = files(1:end-4);
+    [~,files,~] = fileparts(files);
+    flyTracks.name = files;
     
-    flyTracks = adjustTimeStamps(flyTracks);
+%     flyTracks = adjustTimeStamps(flyTracks);
     
     [turnDirs,flyTracks] = determine_turns_120(flyTracks);
     if size(flyTracks.labels,2) == 6 && isstring(flyTracks.labels)
@@ -26,5 +27,6 @@ function turnDirs = extractTurns(flyTracks,files, lightDat)
     turnDirs.lightDat = lightDat;
     turnDirs = calculateWallDist(turnDirs,flyTracks);
 
+    sum(flyTracks.mazeOri)
     
 

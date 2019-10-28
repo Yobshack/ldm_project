@@ -8,10 +8,6 @@
 fullPath = pwd;
 file_path = '~/git/ldm_project/raw_data/15_min_bins/';
 files = dir([file_path,'*.mat']);
-files = files{1};
-if iscell(files) ~= 1
-    files = {files};
-end
 
 lightDat = dlmread('~/git/ldm_project/resources/lightSequenceScreen_15Mins.txt');
 lightDat = [lightDat;lightDat(end,:)];
@@ -19,11 +15,12 @@ lightDat(end,1) = lightDat(end,1)*10;
 
 %turnDirs = cell(0);
 for ii = 1:length(files)
-    f_name = [file_path,files{ii}];
+    f_name_raw = files(ii).name;
+    f_name = [file_path,f_name_raw];
     load(f_name) 
     turnDirs = extractTurns(flyTracks,f_name,lightDat);
     toc
-    save([file_path,strcat(files{ii}(1:(end-4)),'_processed.mat')],'turnDirs')
+    save([file_path,strcat(f_name_raw(1:(end-4)),'_processed.mat')],'turnDirs')
 
 end
 toc
@@ -32,7 +29,7 @@ toc
 %% Make large cell array to handle all data that I can query for groups
 
 files = dir([file_path,'*processed.mat']);
-[allDataCell, cellColNames] = parseProcessedFiles(files);
+[allDataCell, cellColNames] = parseProcessedFiles(files,file_path);
 
 %% Calculate behavioral metrics
 % Takes a while to run this on a large data set
@@ -46,17 +43,9 @@ for ii = 1:length(tV)-1
     times{ii} = [tV(ii) tV(ii+1)];
 end
 
-% times = {[120 240]*60,[240 360]*60}; % time used for scatter plots
-times = {[0 180]*60,[180 360]*60};
+times = {[120 240]*60,[240 480]*60};
 turnFilter = 100;
 
-% times = {[0 15], [15 30], [30 45], [45 60], [60 75], [75 90], [90 105],...
-%     [105 120], [120 135], [135 150], [150 165], [165 180], [180 195],...
-%     [195 210], [210 225], [225 240], [240 255], [255 270], [270 285],...
-%     [285 300], [300 315], [315 330], [330 345], [345 360]};
-% 
-% times = cellfun(@(x) x*60,times,'UniformOutput',0)
-% turnFilter = 30;
 
 bins = unique(lightDat(:,3));
 
@@ -85,7 +74,7 @@ idx2 = strcmp(array(:,3),'SOMA');
 bin = 1;
 
 notNans = all(all(squeeze(~isnan(data(:,2,:,:))),3),2);
- idx = (idx1 | idx2) & notNans;
+idx = (idx1 | idx2) & notNans;
 idx = idx1 & notNans;
 
 subArray = array(idx,:);
@@ -95,7 +84,7 @@ subArray = array(idx,:);
 %% Generate scatter plots and corr bar graph
 
 % set index of behavior you're interested in
-behave = 4;
+behave = 1;
 
 % extract behavior biases for each light bin and time bin
 dat1 = data(idx,behave,1,1);
@@ -168,56 +157,94 @@ save('LDM_figure1dS1.mat','outDat')
 
 %% Make distribution plots
 
-dat_1 = mean([dat1,dat3],2);
-dat_2 = mean([dat2,dat4],2);
-err = sqrt(mean([err1.^2,err2.^2],2)/2);
+numRe = 100;
 
-null_1=cell(0);
-null_2 = null_1;
-for ii = 1:100
-null_1{ii} = normrnd(mean(dat_1),err);
-null_2{ii} = normrnd(mean(dat_2),err);
-end
+dat_1 = mean([dat1,dat2],2);
+dat_2 = mean([dat3,dat4],2);
+err_1 = sqrt(sum([err1.^2,err2.^2],2)/2);
+err_2 = sqrt(sum([err3.^2,err4.^2],2)/2);
+
+dat_1 = dat1;
+dat_2 = dat3;
+err_1 = err1;
+err_2 = err3;
 
 figure
+set(gcf,'Renderer','painters')
+dat_3 = dat_1;
+pts = 0:0.001:1;
+null_1=cell(0);
+for ii = 1:10000
+    rand_i = randi(length(dat_3),length(dat_3),1);
+    null_1{ii} = ksdensity(normrnd(mean(dat_3),err_1(rand_i)),pts);
+end
 null_1 = cell2mat(null_1');
-kde(null_1);
+c = ksdensity(dat_3,pts);
 hold on
+hP = plot(pts,mean(null_1),'Color','cyan');
+patch([pts,fliplr(pts)],[mean(null_1)+std(null_1), fliplr(mean(null_1)-std(null_1))],hP.Color,...
+    'FaceAlpha',0.5,'EdgeAlpha',0)
+plot(pts,c,'Color','cyan')
+
+dat_3 = dat_2;
+pts = 0:0.001:1;
+null_2=cell(0);
+for ii = 1:10000
+    rand_i = randi(length(dat_3),length(dat_3),1);
+    null_2{ii} = ksdensity(normrnd(mean(dat_3),err_2(rand_i)),pts);
+end
 null_2 = cell2mat(null_2');
-kde(null_2);
+c = ksdensity(dat_3,pts);
+hold on
+hP=plot(pts,mean(null_2),'Color','red');
+patch([pts,fliplr(pts)],[mean(null_2)+std(null_2), fliplr(mean(null_2)-std(null_2))],hP.Color,...
+    'FaceAlpha',0.5,'EdgeAlpha',0)
+plot(pts,c,'Color','red')
 
-kde(dat_1);
-kde(dat_2);
 hold off
+ylim([0 max(null_2(:))])
+set(gca,'FontSize',16)
+pbaspect([1.5 1 1])
 
-eles = {'light','dark','null'};
+eles = {'light','dark','null_light','null_dark'};
 if behave == 1
-LDM_FigureS1l = {dat_1,dat_2,null,eles};
+LDM_FigureS1l = {dat_1,dat_2,null_1,null_2,eles};
 save('LDM_FigureS1l.mat','LDM_FigureS1l')
 elseif behave == 2
     
-LDM_FigureS1a = {dat_1,dat_2,null,eles};
+LDM_FigureS1a = {dat_1,dat_2,null_1,null_2,eles};
 save('LDM_FigureS1a.mat','LDM_FigureS1a')
 
 elseif behave == 4
-    LDM_FigureS1h = {dat_1,dat_2,null,eles};
+    LDM_FigureS1h = {dat_1,dat_2,null_1,null_2,eles};
     save('LDM_FigureS1h.mat','LDM_FigureS1h')
 
 end
     
 
-null=cell(0);
-for ii = 1:100
-null{ii} = normrnd(mean(dat_1),err) - normrnd(mean(dat_2),err);
-end
 
 figure
-null = cell2mat(null');
-kde(null);
-hold on
+set(gcf,'Renderer','painters')
 dat_3 = dat_1-dat_2;
-kde(dat_3);
+err_3 = sqrt(sum([err_1.^2,err_2.^2],2));
+pts = -0.5:0.001:0.5;
+null=cell(0);
+for ii = 1:10000
+    means = mean(dat_3);
+    rand_i = randi(length(err_3),length(err_3),1);
+    null{ii} = ksdensity(normrnd(means,err_1(rand_i)) ,pts);
+end
+null = cell2mat(null');
+c = ksdensity(dat_3,pts);
+hold on
+plot(pts,mean(null),'Color',[0 0 0])
+patch([pts,fliplr(pts)],[mean(null)+std(null), fliplr(mean(null)-std(null))],[0 0 0],'FaceAlpha',0.1,'EdgeAlpha',0)
+plot(pts,c,'Color','blue')
 hold off
+ylim([0 max(null(:))])
+set(gca,'FontSize',16)
+pbaspect([1.5 1 1])
+
 
 eles = {'ldm','null'};
 if behave == 2
@@ -233,6 +260,7 @@ elseif behave == 1
 end
 
 shg
+
 
 %% Make individual plot
 

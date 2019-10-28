@@ -27,7 +27,7 @@ for ii = 1:length(files)
     turnDirs = extractTurns(flyTracks,f_name,lightDat);
     toc
     save([file_path,strcat(files{ii}(1:(end-4)),'_processed.mat')],'turnDirs')
-
+ii
 end
 toc
 
@@ -42,48 +42,6 @@ files = dir([file_path,'*processed.mat']);
 
 [allDataCell, cellColNames] = parseProcessedFiles(files,file_path);
 
-%%
-importAnno = GetGoogleSpreadsheet('1imo17lojEJHSthqFs9pHBWPjG_F-CRBeTUWztrszt0A');
-
-%importAnno([140, 148, 153, 170, 172],:) = [];%importAnno([140, 148, 153, 170, 172],[10 9]) 
-%importAnno([107,152],:) = [];
-%importAnno([1:101,136:178],:) = [];
-importAnno = importAnno(122:end,:);
-% importAnno = importAnno([65:80 122:161, 177:end],:);
-
-idx = true(size(allDataCell,1),1);
-adca = allDataCell(idx,:);
-
-idx = true(size(importAnno,1),1);
-importAnno = importAnno(idx,:);
-
-arrayDayMonth = nan(size(adca,1),4);
-for ii = 1:size(adca,1)
-    if ~isdatetime(adca{ii,9})
-    adca{ii,9} = datetime(strcat(adca{ii,9}(3),adca{ii,9}(1),adca{ii,9}(2),...
-    adca{ii,9}(4),adca{ii,9}(5)),'InputFormat',...
-    'yyyyMMddHHmm');
-    end
-    arrayDayMonth(ii,:) = [month(adca{ii,9}) day(adca{ii,9}) adca{ii,8} adca{ii,7}];
-end
-
-
-annoDayMonth = nan(size(importAnno,1),4);
-for ii = 1:size(importAnno,1)
-    if ~isdatetime(importAnno{ii,3})
-    importAnno(ii,3) = {datetime(char(importAnno{ii,3}),'InputFormat','MM_dd_yyyy')};
-    importAnno(ii,4) = {datetime(char(importAnno{ii,4}),'InputFormat','MM_dd_yyyy')};
-    end
-    annoDayMonth(ii,:) = [month(importAnno{ii,3}), day(importAnno{ii,3}),...
-        str2double(importAnno{ii,1}),...
-        str2double(importAnno{ii,15})];
-end
-
-[a,b,c] = intersect(arrayDayMonth,annoDayMonth,'rows');
-
-adca = adca(b,:);
-importAnno1 = importAnno(c,:);
-annoDayMonth = annoDayMonth(c,:);
 
 % idx = [find(all(a == [12 29 49 1],2)); find(all(a == [12 29 46 1],2))];
 % adca(idx,:) = [];
@@ -372,7 +330,11 @@ if iscell(files(1))
     allMat = allMat(~any(cellfun(@isempty,allMat),2),:);
 else
     temp = load(files);
-    allMat = temp.new;
+    if isfield(temp,'new')
+        allMat = temp.new;
+    else
+    allMat = temp.output_complete;
+    end
     allMat = allMat(~any(cellfun(@isempty,allMat),2),:);
 end
 
@@ -381,10 +343,10 @@ end
 % mazeNum = cell2mat(cellfun(@str2num,mazeNumTemp,'un',0));
 mazeNum = cell2mat(allMat(:,3));
 
-annoDateFix = cellfun(@(x) strrep(x,regexp(x,'_Box\d_?\d?\d?\w?\w?','match','once'),''),allMat(:,2),'un',0);
+annoDateFix = cellfun(@(x) strrep(x,regexp(x,'_Box\d_?\d?\d?\w?\w?','match','once'),''),allMat(:,4),'un',0);
 annoDateTemp = cellfun(@(x) strsplit(x,'_'),annoDateFix,'un',0);
 
-ann12oDate = cat(1,annoDateTemp{:});
+annoDate = cat(1,annoDateTemp{:});
 annoDate = cell2mat(cellfun(@str2num,annoDate,'un',0));
 
 monthDay = [cellfun(@month,importAnno(:,4)) cellfun(@day,importAnno(:,4))];
@@ -473,7 +435,7 @@ plot(compVect,allAnimalsMatrix(:,:,4)')
 
 %% 
 clf
-binSize = 1;
+binSize = 3;
 lengthVect = -100:binSize:100;;
 allAnimalsMatrix = nan(size(allMat,1),length(lengthVect),4);
 
@@ -497,10 +459,11 @@ for kk = 1:size(allAnimalsMatrix,1)
             z = allMat{nn,6}(:,3);
         end
         
-        fit1 = fit(x,y,'poly3');
-        fit2 = fit(x,z,'poly3');
+        fit1 = fit(x,y,'poly4');
+        fit2 = fit(x,z,'poly4');
         
-        xVals = (floor(min(x)):binSize:ceil(max(x)))';
+%         xVals = (floor(min(x)):binSize:ceil(max(x)))';
+        xVals = (-50:binSize:100)';
         yVals = feval(fit1,xVals);
         zVals = feval(fit2,xVals);
         
@@ -584,7 +547,7 @@ plot(lengthVect,allAnimalsMatrix(:,:,2)')
 for ii = 1:size(allAnimalsMatrix,1)
     subplot(8,7,ii)
     plot(lengthVect,squeeze(allAnimalsMatrix(ii,:,[1 2])))
-    set(gca,'XLim',[-50 100],'YLim',[0 0.05])
+%     set(gca,'XLim',[-50 100],'YLim',[0 0.05])
 end
 % 
 % chunking = -50:10:100;
@@ -652,8 +615,8 @@ end
 % end
 legTitles = {'Light Bias','Dark Bias','LDM'};
 colors = {[0 0 0.8],[0.8 0 0],[0 0.25 0.5],[0.5 0.25 0],[0 0.5 0.25],[0 0.25 0.5]};
-for ii = 1:2
-subplot(2,1,ii)
+for ii = 1:3
+subplot(3,1,ii)
 yVals = nanmean(dat4);
 plot(xVect,yVals,'LineWidth',4,'color','black','LineStyle','-','Marker','none')
 % hold on
